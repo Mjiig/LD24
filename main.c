@@ -6,11 +6,17 @@
 #include <allegro5/allegro_primitives.h>
 
 const float FPS=60.0;
-const int SCREEN_W=640;
-const int SCREEN_H=640;
+const int SCREEN_W=1000;
+const int SCREEN_H=900;
 
 enum keycodes
 {KEY_UP, KEY_DOWN, KEY_LEFT, KEY_RIGHT};
+
+enum tile
+{WALL, FLOOR, PLAYER, ENEMY};
+
+void draw_map(enum tile map[50][50]);
+void init_map(enum tile map[50][50]);
 
 int init(ALLEGRO_DISPLAY ** display, ALLEGRO_EVENT_QUEUE ** event_queue, ALLEGRO_TIMER ** timer)
 {
@@ -84,11 +90,14 @@ int main()
 	ALLEGRO_TIMER *timer=NULL;
 	bool keys[4]={false, false, false, false};
 	bool redraw;
+	enum tile map[50][50];
 
 	if(!init(&display, &event_queue, &timer))
 	{
 		return 1;
 	}
+
+	init_map(map);
 
 	while(42)
 	{
