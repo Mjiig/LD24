@@ -13,10 +13,38 @@ enum keycodes
 {KEY_UP, KEY_DOWN, KEY_LEFT, KEY_RIGHT};
 
 enum tile
-{WALL, FLOOR, PLAYER, ENEMY};
+{WALL, FLOOR};
+
+struct player
+{
+	int power;
+	int health;
+	int speed;
+	int x;
+	int y;
+	int last_move;
+	int turns_missed;
+};
+
+struct enemy
+{
+	int power;
+	int health;
+	int speed;
+	int x;
+	int y;
+	int last_breed;
+	bool exists;
+	int turns_missed;
+};
 
 void draw_map(enum tile map[50][50]);
 void init_map(enum tile map[50][50]);
+void init_enemies(struct enemy enemies[100], enum tile map[50][50]);
+void draw_enemies(struct enemy enemie[100]);
+int select_mover(struct player player, struct enemy enemies[100]);
+bool move_player(struct player *player, bool keys[4], enum tile map[50][50]);
+void inc_turns(struct player *player, struct enemy enemies[100]);
 
 int init(ALLEGRO_DISPLAY ** display, ALLEGRO_EVENT_QUEUE ** event_queue, ALLEGRO_TIMER ** timer)
 {
@@ -91,6 +119,17 @@ int main()
 	bool keys[4]={false, false, false, false};
 	bool redraw;
 	enum tile map[50][50];
+	struct player player;
+	struct enemy enemies[100];
+	int next;
+
+	
+	player.power=1;
+	player.health=10;
+	player.speed=2;
+	player.x=0;
+	player.y=0;
+	player.turns_missed=0;
 
 	if(!init(&display, &event_queue, &timer))
 	{
@@ -98,6 +137,8 @@ int main()
 	}
 
 	init_map(map);
+
+	init_enemies(enemies, map);
 
 	while(42)
 	{
@@ -107,6 +148,15 @@ int main()
 		if(ev.type == ALLEGRO_EVENT_TIMER)
 		{
 			redraw=true;
+			next=select_mover(player, enemies);
+			if(next==100)
+			{
+				if(move_player(&player, keys, map))
+				{
+					player.turns_missed=0;
+					inc_turns(&player, enemies);
+				}
+			}
 		}
 		else if(ev.type==ALLEGRO_EVENT_DISPLAY_CLOSE)
 		{
@@ -153,6 +203,8 @@ int main()
 			redraw=false;
 			al_clear_to_color(al_map_rgb(255, 255, 255));
 			draw_map(map);
+			draw_enemies(enemies);
+			al_draw_filled_rectangle(player.x*18, player.y*18, player.x*18+18, player.y*18+18, al_map_rgb(0, 255, 0));
 			al_flip_display();
 		}
 	}
@@ -171,12 +223,6 @@ void draw_map(enum tile map[50][50])
 		{
 			switch(map[x][y])
 			{
-				case PLAYER:
-					colour=al_map_rgb(0, 255, 0);
-					break;
-				case ENEMY:
-					colour=al_map_rgb(255, 0, 0);
-					break;
 				case WALL:
 					colour=al_map_rgb(0, 0, 0);
 					break;
@@ -277,5 +323,99 @@ void init_map(enum tile map[50][50])
 				}
 			}
 		}
+	}
+}
+
+void init_enemies(struct enemy enemies[100], enum tile map[50][50])
+{
+	int i;
+
+	for(i=0; i<10; i++)
+	{
+		enemies[i].power=1;
+		enemies[i].health=10;
+		enemies[i].speed=1;
+		enemies[i].x=rand()%40+10;
+		enemies[i].y=rand()%40+10;
+		enemies[i].last_breed=0;
+		enemies[i].exists=true;
+		enemies[i].turns_missed=0;
+		while(map[enemies[i].x][enemies[i].y] != FLOOR)
+		{
+			enemies[i].x=rand()%40+10;
+			enemies[i].y=rand()%40+10;
+		}
+	}
+
+	for(;i<100; i++)
+	{
+		enemies[i].exists=false;
+	}
+}
+
+void draw_enemies(struct enemy enemies[100])
+{
+	int i;
+
+	for(i=0; i<100; i++)
+	{
+		if(enemies[i].exists)
+		{
+			al_draw_filled_rectangle(enemies[i].x*18, enemies[i].y*18, enemies[i].x*18+18, enemies[i].y*18+18, al_map_rgb(255, 0, 0));
+		}
+	}
+}
+
+int select_mover(struct player player, struct enemy enemies[100])
+{
+	//return value of 100 means player, anything references the enemies array
+	int i;
+	int max=player.turns_missed*player.speed;
+	int current=100;
+
+	for(i=0; i<100; i++)
+	{
+		if(enemies[i].speed*enemies[i].turns_missed > max)
+		{
+			max=enemies[i].speed*enemies[i].turns_missed;
+			current=i;
+		}
+	}
+	return current;
+}
+
+bool move_player(struct player *player, bool keys[4], enum tile map[50][50])
+{
+	if(player->last_move>5)
+	{
+		if(keys[KEY_UP] && player->y>0 && map[player->x][player->y-1]==FLOOR)
+			player->y--;
+		else if(keys[KEY_RIGHT] && player->x<49 && map[player->x+1][player->y]==FLOOR)
+			player->x++;
+		else if(keys[KEY_DOWN] && player->y<49 && map[player->x][player->y+1]==FLOOR)
+			player->y++;
+		else if(keys[KEY_LEFT] && player->x>0 && map[player->x-1][player->y]==FLOOR)
+			player->x--;
+
+		if(keys[KEY_UP] || keys[KEY_DOWN] || keys[KEY_RIGHT] || keys[KEY_LEFT])
+		{
+			player->last_move=0;
+			return true;
+		}
+	}
+	else
+	{
+		player->last_move++;
+	}
+	return false;
+}
+
+void inc_turns(struct player *player, struct enemy enemies[100])
+{
+	int i;
+	player->turns_missed++;
+	for(i=0; i<100; i++)
+	{
+		enemies[i].turns_missed++;
 	}
 }
