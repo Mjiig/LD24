@@ -97,6 +97,7 @@ int main()
 
 		if(ev.type == ALLEGRO_EVENT_TIMER)
 		{
+			redraw=true;
 		}
 		else if(ev.type==ALLEGRO_EVENT_DISPLAY_CLOSE)
 		{
@@ -141,6 +142,8 @@ int main()
 		if(redraw && al_is_event_queue_empty(event_queue))
 		{
 			redraw=false;
+			al_clear_to_color(al_map_rgb(255, 255, 255));
+			draw_map(map);
 			al_flip_display();
 		}
 	}
