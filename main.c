@@ -160,3 +160,122 @@ int main()
 	return 0;
 }
 
+void draw_map(enum tile map[50][50])
+{
+	int x, y;
+	ALLEGRO_COLOR colour;
+
+	for(x=0; x<50; x++)
+	{
+		for(y=0; y<50; y++)
+		{
+			switch(map[x][y])
+			{
+				case PLAYER:
+					colour=al_map_rgb(0, 255, 0);
+					break;
+				case ENEMY:
+					colour=al_map_rgb(255, 0, 0);
+					break;
+				case WALL:
+					colour=al_map_rgb(0, 0, 0);
+					break;
+				default:
+					colour=al_map_rgb(255, 255, 255);
+			}
+			al_draw_filled_rectangle(x*18, y*18, x*18+18, y*18+18, colour);
+		}
+	}
+}
+
+void init_map(enum tile map[50][50])
+{
+	int x, y;
+	int len, width;
+	int offset_x, offset_y;
+	int x1, y1;
+	int direction;
+
+	for(x=0; x<50; x++)
+	{
+		for(y=0; y<50; y++)
+		{
+			if(x%49==0 || y%49==-0)
+			{
+				map[x][y]=FLOOR;
+			}
+			else
+			{
+				map[x][y]=WALL;
+			}
+		}
+	}
+
+	for(x=0; x<10; x++)
+	{
+		for(y=0; y<10; y++)
+		{
+			if(rand()%2)
+			{
+				continue;
+			}
+			len=rand()%4+1;
+			width=rand()%4+1;
+			offset_y=rand()%(5-len);
+			offset_x=rand()%(5-width);
+
+			for(x1=0; x1<width; x1++)
+			{
+				for(y1=0; y1<len; y1++)
+				{
+					map[x*5+offset_x+x1+1][y*5+offset_y+y1+1]=FLOOR;
+				}
+			}
+
+			direction=rand()%4;
+
+			switch(direction)
+			{
+				case 0: //up
+					x1=x*5+offset_x+rand()%width+1;
+					y1=y*5+offset_y;
+					break;
+				case 1: //right
+					x1=x*5+offset_x+width+1;
+					y1=y*5+offset_y+rand()%len+1;
+					break;
+				case 2: //down
+					x1=x*5+offset_x+rand()%width+1;
+					y1=y*5+offset_y+len+1;
+					break;
+				case 3: //left
+					x1=x*5+offset_x;
+					y1=y*5+offset_y+rand()%len+1;
+					break;
+			}
+
+			if(x1==50 || y1==50)
+				continue;
+
+			while(map[x1][y1]!=FLOOR)
+			{
+				map[x1][y1]=FLOOR;
+				switch(direction)
+				{
+					case 0: //up
+						x1--;
+						break;
+					case 1: //right
+						y1++;
+						break;
+					case 2: //down
+						x1++;
+						break;
+					case 3: //left
+						y1--;
+						break;
+				}
+			}
+		}
+	}
+}
