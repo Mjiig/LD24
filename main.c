@@ -9,6 +9,11 @@ const float FPS=60.0;
 const int SCREEN_W=1000;
 const int SCREEN_H=900;
 
+ALLEGRO_BITMAP *wall_img;
+ALLEGRO_BITMAP *floor_img;
+ALLEGRO_BITMAP *player_img;
+ALLEGRO_BITMAP *enemy_img;
+
 enum keycodes
 {KEY_UP, KEY_DOWN, KEY_LEFT, KEY_RIGHT};
 
@@ -79,6 +84,12 @@ int init(ALLEGRO_DISPLAY ** display, ALLEGRO_EVENT_QUEUE ** event_queue, ALLEGRO
 		return 0;
 	}
 
+	if(!al_init_image_addon())
+	{
+		fprintf(stderr, "Failed to initialise image addon\n");
+		return 0;
+	}
+
 	if(!al_install_mouse())
 	{
 		fprintf(stderr, "Could not initialise mouse bindings!\n");
@@ -107,6 +118,12 @@ int init(ALLEGRO_DISPLAY ** display, ALLEGRO_EVENT_QUEUE ** event_queue, ALLEGRO
 	al_flip_display();
 	
 	al_start_timer(*timer);
+	
+	//initialise some horrible global constants!
+	wall_img=al_load_bitmap("wall.png");
+	floor_img=al_load_bitmap("floor.png");
+	player_img=al_load_bitmap("player.png");
+	enemy_img=al_load_bitmap("enemy.png");
 
 	return 1;
 }
@@ -204,7 +221,7 @@ int main()
 			al_clear_to_color(al_map_rgb(255, 255, 255));
 			draw_map(map);
 			draw_enemies(enemies);
-			al_draw_filled_rectangle(player.x*18, player.y*18, player.x*18+18, player.y*18+18, al_map_rgb(0, 255, 0));
+			al_draw_bitmap(player_img, player.x*18, player.y*18, 0);
 			al_flip_display();
 		}
 	}
@@ -215,7 +232,7 @@ int main()
 void draw_map(enum tile map[50][50])
 {
 	int x, y;
-	ALLEGRO_COLOR colour;
+	ALLEGRO_BITMAP * image;
 
 	for(x=0; x<50; x++)
 	{
@@ -224,12 +241,12 @@ void draw_map(enum tile map[50][50])
 			switch(map[x][y])
 			{
 				case WALL:
-					colour=al_map_rgb(0, 0, 0);
+					image=wall_img;
 					break;
 				default:
-					colour=al_map_rgb(255, 255, 255);
+					image=floor_img;
 			}
-			al_draw_filled_rectangle(x*18, y*18, x*18+18, y*18+18, colour);
+			al_draw_bitmap(image,x*18, y*18, 0);
 		}
 	}
 }
@@ -361,7 +378,7 @@ void draw_enemies(struct enemy enemies[100])
 	{
 		if(enemies[i].exists)
 		{
-			al_draw_filled_rectangle(enemies[i].x*18, enemies[i].y*18, enemies[i].x*18+18, enemies[i].y*18+18, al_map_rgb(255, 0, 0));
+			al_draw_bitmap(enemy_img, enemies[i].x*18, enemies[i].y*18, 0);
 		}
 	}
 }
