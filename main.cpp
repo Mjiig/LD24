@@ -5,6 +5,8 @@
 #include <allegro5/allegro.h>
 #include <allegro5/allegro_image.h>
 #include <allegro5/allegro_primitives.h>
+#include <allegro5/allegro_font.h>
+#include <allegro5/allegro_ttf.h>
 
 const float FPS=60.0;
 const int SCREEN_W=1000;
@@ -25,33 +27,41 @@ struct player
 {
 	int power;
 	int health;
+	int max_health;
 	int speed;
 	int x;
 	int y;
 	int last_move;
 	int turns_missed;
+	int kills;
+	int upgrades;
 };
 
 struct enemy
 {
 	int power;
 	int health;
+	int max_health;
 	int speed;
 	int x;
 	int y;
-	int last_breed;
 	bool exists;
 	int turns_missed;
 };
 
 void draw_map(enum tile map[50][50]);
 void init_map(enum tile map[50][50]);
-void init_enemies(struct enemy enemies[100], enum tile map[50][50]);
+void init_enemies(struct enemy enemies[100], enum tile map[50][50], int n);
 void draw_enemies(struct enemy enemie[100]);
 int select_mover(struct player player, struct enemy enemies[100]);
-bool move_player(struct player *player, bool keys[4], enum tile map[50][50]);
+bool move_player(struct player *player, bool keys[4], enum tile map[50][50], struct enemy enemies[100]);
 void inc_turns(struct player *player, struct enemy enemies[100]);
 void search(int x, int y, enum tile map[50][50], int target_x, int target_y, int * ret_x, int * ret_y);
+int is_enemy(int x, int y, struct enemy enemies[100]);
+bool is_player(int x, int y, struct player player);
+void fight(struct player *player, struct enemy enemies[100], int index);
+void breed(struct enemy enemies[100], enum tile map[50][50]);
+bool all_enemies_dead(struct enemy enemies[100]);
 
 int init(ALLEGRO_DISPLAY ** display, ALLEGRO_EVENT_QUEUE ** event_queue, ALLEGRO_TIMER ** timer)
 {
@@ -101,7 +111,11 @@ int init(ALLEGRO_DISPLAY ** display, ALLEGRO_EVENT_QUEUE ** event_queue, ALLEGRO
 	if(!al_install_keyboard())
 	{
 		fprintf(stderr, "Could not initilaise keyboard bindings!\n");
+		return 0;
 	}
+
+	al_init_font_addon();
+	al_init_ttf_addon();
 
 	*event_queue=al_create_event_queue();
 	if(!*event_queue)
@@ -135,20 +149,27 @@ int main()
 	ALLEGRO_DISPLAY *display = NULL;
 	ALLEGRO_EVENT_QUEUE *event_queue=NULL;
 	ALLEGRO_TIMER *timer=NULL;
+	ALLEGRO_FONT *font=NULL;
 	bool keys[4]={false, false, false, false};
 	bool redraw;
 	enum tile map[50][50];
 	struct player player;
 	struct enemy enemies[100];
 	int next;
+	int selected_enemy=100;
+	int level=1;
+	int best=1;
 
 	
-	player.power=1;
-	player.health=10;
+	player.power=5;
+	player.health=30;
+	player.max_health=30;
 	player.speed=2;
 	player.x=0;
 	player.y=0;
 	player.turns_missed=0;
+	player.kills=0;
+	player.upgrades=4;
 
 	if(!init(&display, &event_queue, &timer))
 	{
@@ -157,7 +178,9 @@ int main()
 
 	init_map(map);
 
-	init_enemies(enemies, map);
+	init_enemies(enemies, map, 5);
+
+	font=al_load_font("Xolonium-Regular.otf", 30, 0);
 
 	while(42)
 	{
@@ -170,7 +193,7 @@ int main()
 			next=select_mover(player, enemies);
 			if(next==100)
 			{
-				if(move_player(&player, keys, map))
+				if(move_player(&player, keys, map, enemies))
 				{
 					player.turns_missed=0;
 					inc_turns(&player, enemies);
@@ -180,12 +203,56 @@ int main()
 			{
 				int ret_x, ret_y;
 				search(enemies[next].x, enemies[next].y, map, player.x, player.y, &ret_x, &ret_y);
-				enemies[next].x=ret_x;
-				enemies[next].y=ret_y;
+				if(!is_player(ret_x, ret_y, player) && is_enemy(ret_x, ret_y, enemies)==100)
+				{
+					enemies[next].x=ret_x;
+					enemies[next].y=ret_y;
+				}
+				if(is_player(ret_x, ret_y, player))
+				{
+					fight(&player, enemies, next);
+				}
 				enemies[next].turns_missed=0;
 				inc_turns(&player, enemies);
+				if(!(rand()%(150/level)))
+				{
+					breed(enemies, map);
+				}
 			}
 
+			if(enemies[selected_enemy].health<=0)
+			{
+				selected_enemy=100;
+			}
+
+			if(all_enemies_dead(enemies))
+			{
+				level++;
+				init_map(map);
+				init_enemies(enemies, map, level*5);
+				player.x=0;
+				player.y=0;
+				if(level>best)
+				{
+					best=level;
+				}
+			}
+
+			if(player.health<=0)
+			{
+				level=1;
+				init_map(map);
+				init_enemies(enemies, map, level*5);
+				player.power=5;
+				player.health=30;
+				player.max_health=30;
+				player.speed=2;
+				player.x=0;
+				player.y=0;
+				player.turns_missed=0;
+				player.kills=0;
+				player.upgrades=0;
+			}
 		}
 		else if(ev.type==ALLEGRO_EVENT_DISPLAY_CLOSE)
 		{
@@ -227,6 +294,42 @@ int main()
 					break;
 			}
 		}
+		else if(ev.type == ALLEGRO_EVENT_MOUSE_BUTTON_DOWN)
+		{
+			int old_selected=selected_enemy;
+
+			selected_enemy=is_enemy(ev.mouse.x/18, ev.mouse.y/18, enemies);
+
+			if(selected_enemy==100)
+				selected_enemy=old_selected;
+
+			if(ev.mouse.x>900 && player.kills >= (player.upgrades * player.upgrades)/10)
+			{
+				bool change=false;
+				if(ev.mouse.y>10 && ev.mouse.y<40)
+				{
+					player.max_health+=5;
+					player.health=player.max_health;
+					change=true;
+				}
+				else if(ev.mouse.y>50 && ev.mouse.y<80)
+				{
+					player.power+=2;
+					change=true;
+				}
+				else if(ev.mouse.y>90 && ev.mouse.y<120)
+				{
+					player.speed+=1;
+					change=true;
+				}
+				
+				if(change)
+				{
+					player.upgrades+=1;
+				}
+			}
+		}
+
 		if(redraw && al_is_event_queue_empty(event_queue))
 		{
 			redraw=false;
@@ -234,6 +337,19 @@ int main()
 			draw_map(map);
 			draw_enemies(enemies);
 			al_draw_bitmap(player_img, player.x*18, player.y*18, 0);
+			al_draw_textf(font, al_map_rgb(0, 255, 0), 950, 10, ALLEGRO_ALIGN_CENTRE, "%d", player.health);
+			al_draw_textf(font, al_map_rgb(0, 255, 0), 950, 50, ALLEGRO_ALIGN_CENTRE, "%d", player.power);
+			al_draw_textf(font, al_map_rgb(0, 255, 0), 950, 90, ALLEGRO_ALIGN_CENTRE, "%d", player.speed);
+			al_draw_textf(font, al_map_rgb(0, 0, 255), 950, 150, ALLEGRO_ALIGN_CENTRE, "%d", player.kills);
+			al_draw_textf(font, al_map_rgb(0, 0, 255), 950, 190, ALLEGRO_ALIGN_CENTRE, "%d", (player.upgrades*player.upgrades)/10);
+			if(selected_enemy!=100)
+			{
+				al_draw_textf(font, al_map_rgb(255, 0, 0), 950, 250, ALLEGRO_ALIGN_CENTRE, "%d", enemies[selected_enemy].health);
+				al_draw_textf(font, al_map_rgb(255, 0, 0), 950, 290, ALLEGRO_ALIGN_CENTRE, "%d", enemies[selected_enemy].power);
+				al_draw_textf(font, al_map_rgb(255, 0, 0), 950, 330, ALLEGRO_ALIGN_CENTRE, "%d", enemies[selected_enemy].speed);
+			}
+			al_draw_textf(font, al_map_rgb(0, 0, 0), 950, 390, ALLEGRO_ALIGN_CENTRE, "%d", level);
+			al_draw_textf(font, al_map_rgb(0, 0, 0), 950, 430, ALLEGRO_ALIGN_CENTRE, "%d", best);
 			al_flip_display();
 		}
 	}
@@ -355,20 +471,25 @@ void init_map(enum tile map[50][50])
 	}
 }
 
-void init_enemies(struct enemy enemies[100], enum tile map[50][50])
+void init_enemies(struct enemy enemies[100], enum tile map[50][50], int n)
 {
 	int i;
 
-	for(i=0; i<10; i++)
+	if(n>100)
+	{
+		n=100;
+	}
+
+	for(i=0; i<n; i++)
 	{
 		enemies[i].power=1;
 		enemies[i].health=10;
 		enemies[i].speed=1;
 		enemies[i].x=rand()%40+10;
 		enemies[i].y=rand()%40+10;
-		enemies[i].last_breed=0;
 		enemies[i].exists=true;
 		enemies[i].turns_missed=0;
+		enemies[i].max_health=5;
 		while(map[enemies[i].x][enemies[i].y] != FLOOR)
 		{
 			enemies[i].x=rand()%40+10;
@@ -413,18 +534,30 @@ int select_mover(struct player player, struct enemy enemies[100])
 	return current;
 }
 
-bool move_player(struct player *player, bool keys[4], enum tile map[50][50])
+bool move_player(struct player *player, bool keys[4], enum tile map[50][50], struct enemy enemies[100])
 {
-	if(player->last_move>3)
+	int new_x=player->x;
+	int new_y=player->y;
+	if(player->last_move>1)
 	{
 		if(keys[KEY_UP] && player->y>0 && map[player->x][player->y-1]==FLOOR)
-			player->y--;
+			new_y--;
 		else if(keys[KEY_RIGHT] && player->x<49 && map[player->x+1][player->y]==FLOOR)
-			player->x++;
+			new_x++;
 		else if(keys[KEY_DOWN] && player->y<49 && map[player->x][player->y+1]==FLOOR)
-			player->y++;
+			new_y++;
 		else if(keys[KEY_LEFT] && player->x>0 && map[player->x-1][player->y]==FLOOR)
-			player->x--;
+			new_x--;
+
+		if(is_enemy(new_x, new_y, enemies)==100)
+		{
+			player->x=new_x;
+			player->y=new_y;
+		}
+		else
+		{
+			fight(player, enemies, is_enemy(new_x, new_y, enemies));
+		}
 
 		if(keys[KEY_UP] || keys[KEY_DOWN] || keys[KEY_RIGHT] || keys[KEY_LEFT])
 		{
@@ -475,7 +608,7 @@ void search(int x, int y, enum tile map[50][50], int target_x, int target_y, int
 	x_queue.push(x);
 	y_queue.push(y);
 
-	while(true)
+	while(!x_queue.empty())
 	{
 		int current_x=x_queue.front();
 		int current_y=y_queue.front();
@@ -485,7 +618,7 @@ void search(int x, int y, enum tile map[50][50], int target_x, int target_y, int
 		x_queue.pop();
 		y_queue.pop();
 
-		if(selected[current_x][current_y] || map[current_x][current_y]==WALL)
+		if(selected[current_x][current_y] || map[current_x][current_y]==WALL || dist[current_x][current_y]>25)
 			continue;
 
 		selected[current_x][current_y]=true;
@@ -522,4 +655,122 @@ void search(int x, int y, enum tile map[50][50], int target_x, int target_y, int
 			return;
 		}
 	}
+
+	*ret_x=x;
+	*ret_y=y;
+}
+
+bool is_player(int x, int y, struct player player)
+{
+	if(x==player.x && y==player.y)
+	{
+		return true;
+	}
+	return false;
+}
+
+int is_enemy(int x, int y, struct enemy enemies[100])
+{
+	for(int i=0; i<100; i++)
+	{
+		if(enemies[i].exists && enemies[i].x==x && enemies[i].y==y)
+		{
+			return i;
+		}
+	}
+	return 100; //stupid sentinal value
+}
+
+void fight(struct player *player, struct enemy enemies[100], int index)
+{
+	int hit_p=rand()%(player->power+1);
+	int hit_e=rand()%(enemies[index].power+1);
+
+	player->health-=hit_e;
+	enemies[index].health-=hit_p;
+	if(enemies[index].health<=0)
+	{
+		enemies[index].exists=false;
+		player->kills++;
+	}
+}
+
+void breed(struct enemy enemies[100], enum tile map[50][50])
+{
+	//Pick an enemy at random
+	int parent;
+	int accumulator=1;
+	for(int i=0; i<100; i++)
+	{
+		if(enemies[i].exists)
+		{
+			if(!(rand()%accumulator))
+			{
+				parent=i;
+			}
+			accumulator++;
+		}
+	}
+
+	int xs[]={enemies[parent].x+1, enemies[parent].x-1, enemies[parent].x, enemies[parent].x};
+	int ys[]={enemies[parent].y, enemies[parent].y, enemies[parent].y+1, enemies[parent].y-1};
+
+	int child_x;
+	int child_y;
+
+	accumulator=0;
+
+	for(int c=0; c<4; c++)
+	{
+		if(xs[c]<0 || xs[c]>49 || ys[c]<0 || ys[c]>49 || map[xs[c]][ys[c]]==WALL || is_enemy(xs[c], ys[c], enemies)!=100)
+		{
+			accumulator++;
+			continue;
+		}
+		child_x=xs[c];
+		child_y=ys[c];
+	}
+
+	if(accumulator==4)
+	{
+		return;
+	}
+
+
+	int child_index;
+
+
+	for(child_index=0; child_index<100; child_index++)
+	{
+		if(!(enemies[child_index].exists))
+		{
+			break;
+		}
+	}
+
+	if(child_index==100)
+	{
+		return;
+	}
+
+	enemies[child_index].x=child_x;
+	enemies[child_index].y=child_y;
+	enemies[child_index].exists=true;
+	enemies[child_index].turns_missed=0;
+	enemies[child_index].power=enemies[parent].power+(rand()%3 ? 0 : (1));
+	enemies[child_index].speed=enemies[parent].speed+(rand()%3 ? 0 : 1);
+	enemies[child_index].max_health=enemies[parent].max_health+(rand()%3 ? 0 : 5);
+	enemies[child_index].health=enemies[child_index].max_health;
+}
+
+bool all_enemies_dead(struct enemy enemies[100])
+{
+	for(int i=0; i<100; i++)
+	{
+		if(enemies[i].exists)
+		{
+			return false;
+		}
+	}
+	return true;
 }
