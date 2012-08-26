@@ -10,7 +10,7 @@
 
 const float FPS=60.0;
 const int SCREEN_W=1000;
-const int SCREEN_H=900;
+const int SCREEN_H=540;
 
 ALLEGRO_BITMAP *wall_img;
 ALLEGRO_BITMAP *floor_img;
@@ -49,18 +49,18 @@ struct enemy
 	int turns_missed;
 };
 
-void draw_map(enum tile map[50][50]);
-void init_map(enum tile map[50][50]);
-void init_enemies(struct enemy enemies[100], enum tile map[50][50], int n);
+void draw_map(enum tile map[50][30]);
+void init_map(enum tile map[50][30]);
+void init_enemies(struct enemy enemies[100], enum tile map[50][30], int n);
 void draw_enemies(struct enemy enemie[100]);
 int select_mover(struct player player, struct enemy enemies[100]);
-bool move_player(struct player *player, bool keys[4], enum tile map[50][50], struct enemy enemies[100]);
+bool move_player(struct player *player, bool keys[4], enum tile map[50][30], struct enemy enemies[100]);
 void inc_turns(struct player *player, struct enemy enemies[100]);
-void search(int x, int y, enum tile map[50][50], int target_x, int target_y, int * ret_x, int * ret_y);
+void search(int x, int y, enum tile map[50][30], int target_x, int target_y, int * ret_x, int * ret_y);
 int is_enemy(int x, int y, struct enemy enemies[100]);
 bool is_player(int x, int y, struct player player);
 void fight(struct player *player, struct enemy enemies[100], int index);
-void breed(struct enemy enemies[100], enum tile map[50][50]);
+void breed(struct enemy enemies[100], enum tile map[50][30]);
 bool all_enemies_dead(struct enemy enemies[100]);
 
 int init(ALLEGRO_DISPLAY ** display, ALLEGRO_EVENT_QUEUE ** event_queue, ALLEGRO_TIMER ** timer)
@@ -152,7 +152,7 @@ int main()
 	ALLEGRO_FONT *font=NULL;
 	bool keys[4]={false, false, false, false};
 	bool redraw;
-	enum tile map[50][50];
+	enum tile map[50][30];
 	struct player player;
 	struct enemy enemies[100];
 	int next;
@@ -357,14 +357,14 @@ int main()
 	return 0;
 }
 
-void draw_map(enum tile map[50][50])
+void draw_map(enum tile map[50][30])
 {
 	int x, y;
 	ALLEGRO_BITMAP * image;
 
 	for(x=0; x<50; x++)
 	{
-		for(y=0; y<50; y++)
+		for(y=0; y<30; y++)
 		{
 			switch(map[x][y])
 			{
@@ -379,7 +379,7 @@ void draw_map(enum tile map[50][50])
 	}
 }
 
-void init_map(enum tile map[50][50])
+void init_map(enum tile map[50][30])
 {
 	int x, y;
 	int len, width;
@@ -389,9 +389,9 @@ void init_map(enum tile map[50][50])
 
 	for(x=0; x<50; x++)
 	{
-		for(y=0; y<50; y++)
+		for(y=0; y<30; y++)
 		{
-			if(x%49==0 || y%49==-0)
+			if(x%49==0 || y%29==-0)
 			{
 				map[x][y]=FLOOR;
 			}
@@ -404,7 +404,7 @@ void init_map(enum tile map[50][50])
 
 	for(x=0; x<10; x++)
 	{
-		for(y=0; y<10; y++)
+		for(y=0; y<6; y++)
 		{
 			if(rand()%2)
 			{
@@ -445,7 +445,7 @@ void init_map(enum tile map[50][50])
 					break;
 			}
 
-			if(x1==50 || y1==50)
+			if(x1==50 || y1==30)
 				continue;
 
 			while(map[x1][y1]!=FLOOR)
@@ -471,7 +471,7 @@ void init_map(enum tile map[50][50])
 	}
 }
 
-void init_enemies(struct enemy enemies[100], enum tile map[50][50], int n)
+void init_enemies(struct enemy enemies[100], enum tile map[50][30], int n)
 {
 	int i;
 
@@ -486,14 +486,14 @@ void init_enemies(struct enemy enemies[100], enum tile map[50][50], int n)
 		enemies[i].health=10;
 		enemies[i].speed=1;
 		enemies[i].x=rand()%40+10;
-		enemies[i].y=rand()%40+10;
+		enemies[i].y=rand()%20+10;
 		enemies[i].exists=true;
 		enemies[i].turns_missed=0;
 		enemies[i].max_health=5;
 		while(map[enemies[i].x][enemies[i].y] != FLOOR)
 		{
 			enemies[i].x=rand()%40+10;
-			enemies[i].y=rand()%40+10;
+			enemies[i].y=rand()%20+10;
 		}
 	}
 
@@ -534,7 +534,7 @@ int select_mover(struct player player, struct enemy enemies[100])
 	return current;
 }
 
-bool move_player(struct player *player, bool keys[4], enum tile map[50][50], struct enemy enemies[100])
+bool move_player(struct player *player, bool keys[4], enum tile map[50][30], struct enemy enemies[100])
 {
 	int new_x=player->x;
 	int new_y=player->y;
@@ -544,7 +544,7 @@ bool move_player(struct player *player, bool keys[4], enum tile map[50][50], str
 			new_y--;
 		else if(keys[KEY_RIGHT] && player->x<49 && map[player->x+1][player->y]==FLOOR)
 			new_x++;
-		else if(keys[KEY_DOWN] && player->y<49 && map[player->x][player->y+1]==FLOOR)
+		else if(keys[KEY_DOWN] && player->y<29 && map[player->x][player->y+1]==FLOOR)
 			new_y++;
 		else if(keys[KEY_LEFT] && player->x>0 && map[player->x-1][player->y]==FLOOR)
 			new_x--;
@@ -582,19 +582,19 @@ void inc_turns(struct player *player, struct enemy enemies[100])
 	}
 }
 
-void search(int x, int y, enum tile map[50][50], int target_x, int target_y, int * ret_x, int * ret_y)
+void search(int x, int y, enum tile map[50][30], int target_x, int target_y, int * ret_x, int * ret_y)
 {
-	bool selected[50][50];
-	int prev_x[50][50];
-	int prev_y[50][50];
-	int dist[50][50];
+	bool selected[50][30];
+	int prev_x[50][30];
+	int prev_y[50][30];
+	int dist[50][30];
 
 	std::queue<int> x_queue;
 	std::queue<int> y_queue;
 
 	for(int x1=0; x1<50; x1++)
 	{
-		for(int y1=0; y1<50; y1++)
+		for(int y1=0; y1<30; y1++)
 		{
 			selected[x1][y1]=false;
 			prev_x[x1][y1]=-1;
@@ -613,12 +613,10 @@ void search(int x, int y, enum tile map[50][50], int target_x, int target_y, int
 		int current_x=x_queue.front();
 		int current_y=y_queue.front();
 
-		while(x_queue.size() == 0 || y_queue.size()==0);
-
 		x_queue.pop();
 		y_queue.pop();
 
-		if(selected[current_x][current_y] || map[current_x][current_y]==WALL || dist[current_x][current_y]>25)
+		if(selected[current_x][current_y] || map[current_x][current_y]==WALL || dist[current_x][current_y]>20)
 			continue;
 
 		selected[current_x][current_y]=true;
@@ -628,7 +626,7 @@ void search(int x, int y, enum tile map[50][50], int target_x, int target_y, int
 
 		for(int c=0; c<4; c++)
 		{
-			if(xs[c]<0 || xs[c]>49 || ys[c]<0 || ys[c]>49)
+			if(xs[c]<0 || xs[c]>49 || ys[c]<0 || ys[c]>29)
 				continue;
 			if(dist[xs[c]][ys[c]]>dist[current_x][current_y])
 			{
@@ -695,7 +693,7 @@ void fight(struct player *player, struct enemy enemies[100], int index)
 	}
 }
 
-void breed(struct enemy enemies[100], enum tile map[50][50])
+void breed(struct enemy enemies[100], enum tile map[50][30])
 {
 	//Pick an enemy at random
 	int parent;
@@ -722,7 +720,7 @@ void breed(struct enemy enemies[100], enum tile map[50][50])
 
 	for(int c=0; c<4; c++)
 	{
-		if(xs[c]<0 || xs[c]>49 || ys[c]<0 || ys[c]>49 || map[xs[c]][ys[c]]==WALL || is_enemy(xs[c], ys[c], enemies)!=100)
+		if(xs[c]<0 || xs[c]>49 || ys[c]<0 || ys[c]>29 || map[xs[c]][ys[c]]==WALL || is_enemy(xs[c], ys[c], enemies)!=100)
 		{
 			accumulator++;
 			continue;
