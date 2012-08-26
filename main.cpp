@@ -1,6 +1,7 @@
 #define ALLEGRO_STATICLINK
-#include <stdio.h>
-#include <math.h>
+#include <cstdio>
+#include <cmath>
+#include <queue>
 #include <allegro5/allegro.h>
 #include <allegro5/allegro_image.h>
 #include <allegro5/allegro_primitives.h>
@@ -50,6 +51,7 @@ void draw_enemies(struct enemy enemie[100]);
 int select_mover(struct player player, struct enemy enemies[100]);
 bool move_player(struct player *player, bool keys[4], enum tile map[50][50]);
 void inc_turns(struct player *player, struct enemy enemies[100]);
+void search(int x, int y, enum tile map[50][50], int target_x, int target_y, int * ret_x, int * ret_y);
 
 int init(ALLEGRO_DISPLAY ** display, ALLEGRO_EVENT_QUEUE ** event_queue, ALLEGRO_TIMER ** timer)
 {
@@ -174,6 +176,16 @@ int main()
 					inc_turns(&player, enemies);
 				}
 			}
+			else
+			{
+				int ret_x, ret_y;
+				search(enemies[next].x, enemies[next].y, map, player.x, player.y, &ret_x, &ret_y);
+				enemies[next].x=ret_x;
+				enemies[next].y=ret_y;
+				enemies[next].turns_missed=0;
+				inc_turns(&player, enemies);
+			}
+
 		}
 		else if(ev.type==ALLEGRO_EVENT_DISPLAY_CLOSE)
 		{
@@ -392,7 +404,7 @@ int select_mover(struct player player, struct enemy enemies[100])
 
 	for(i=0; i<100; i++)
 	{
-		if(enemies[i].speed*enemies[i].turns_missed > max)
+		if(enemies[i].exists && enemies[i].speed*enemies[i].turns_missed > max)
 		{
 			max=enemies[i].speed*enemies[i].turns_missed;
 			current=i;
@@ -403,7 +415,7 @@ int select_mover(struct player player, struct enemy enemies[100])
 
 bool move_player(struct player *player, bool keys[4], enum tile map[50][50])
 {
-	if(player->last_move>5)
+	if(player->last_move>3)
 	{
 		if(keys[KEY_UP] && player->y>0 && map[player->x][player->y-1]==FLOOR)
 			player->y--;
@@ -434,5 +446,80 @@ void inc_turns(struct player *player, struct enemy enemies[100])
 	for(i=0; i<100; i++)
 	{
 		enemies[i].turns_missed++;
+	}
+}
+
+void search(int x, int y, enum tile map[50][50], int target_x, int target_y, int * ret_x, int * ret_y)
+{
+	bool selected[50][50];
+	int prev_x[50][50];
+	int prev_y[50][50];
+	int dist[50][50];
+
+	std::queue<int> x_queue;
+	std::queue<int> y_queue;
+
+	for(int x1=0; x1<50; x1++)
+	{
+		for(int y1=0; y1<50; y1++)
+		{
+			selected[x1][y1]=false;
+			prev_x[x1][y1]=-1;
+			prev_y[x1][y1]=-1;
+			dist[x1][y1]=1000000;
+		}
+	}
+
+	dist[x][y]=0;
+
+	x_queue.push(x);
+	y_queue.push(y);
+
+	while(true)
+	{
+		int current_x=x_queue.front();
+		int current_y=y_queue.front();
+
+		while(x_queue.size() == 0 || y_queue.size()==0);
+
+		x_queue.pop();
+		y_queue.pop();
+
+		if(selected[current_x][current_y] || map[current_x][current_y]==WALL)
+			continue;
+
+		selected[current_x][current_y]=true;
+
+		int xs[]={current_x+1, current_x-1, current_x, current_x};
+		int ys[]={current_y, current_y, current_y+1, current_y-1};
+
+		for(int c=0; c<4; c++)
+		{
+			if(xs[c]<0 || xs[c]>49 || ys[c]<0 || ys[c]>49)
+				continue;
+			if(dist[xs[c]][ys[c]]>dist[current_x][current_y])
+			{
+				dist[xs[c]][ys[c]]=dist[current_x][current_y]+1;
+				prev_x[xs[c]][ys[c]]=current_x;
+				prev_y[xs[c]][ys[c]]=current_y;
+			}
+
+			x_queue.push(xs[c]);
+			y_queue.push(ys[c]);
+		}
+
+		if(current_x == target_x && current_y==target_y)
+		{
+			while(dist[current_x][current_y]>1)
+			{
+				int temp_x=current_x;
+				current_x=prev_x[current_x][current_y];
+				current_y=prev_y[temp_x][current_y];
+			}
+
+			*ret_x=current_x;
+			*ret_y=current_y;
+			return;
+		}
 	}
 }
